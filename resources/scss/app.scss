@@ -1,0 +1,10 @@
+// CSS plugin (DataTables, Select2, dll.) di-import dari resources/js/app.js
+// sebelum file ini, sehingga tema di bawah bisa menimpanya.
+@import "variables";
+@import "bootstrap/scss/bootstrap";
+
+@import "theme/base";
+@import "theme/shell";
+@import "theme/components";
+@import "theme/plugins";
+@import "theme/auth";

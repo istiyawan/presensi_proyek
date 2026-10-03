@@ -1,0 +1,84 @@
+.auth-page {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    background: #fff;
+}
+
+.auth-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 3rem;
+    color: #fff;
+    background:
+        radial-gradient(80% 60% at 15% 10%, rgba(var(--brand-rgb), .65), transparent 60%),
+        radial-gradient(70% 70% at 100% 100%, rgba(56, 189, 248, .22), transparent 60%),
+        linear-gradient(160deg, #0d1628 0%, #070d19 100%);
+
+    // pola grid halus
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(80% 70% at 30% 30%, #000 30%, transparent 75%);
+    }
+
+    > * { position: relative; }
+
+    .hero-brand { display: flex; align-items: center; gap: .85rem; font-weight: 700; font-size: 1.05rem; }
+
+    .hero-copy {
+        max-width: 30rem;
+
+        h1 { color: #fff; font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 800; letter-spacing: -.035em; line-height: 1.12; }
+        p { color: #aab6c8; font-size: .95rem; margin-top: 1rem; }
+    }
+
+    .hero-points {
+        display: grid;
+        gap: .75rem;
+        margin-top: 2rem;
+
+        div { display: flex; align-items: center; gap: .75rem; color: #dbe4f0; font-size: .86rem; font-weight: 500; }
+        .bi {
+            width: 2rem;
+            height: 2rem;
+            border-radius: .6rem;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .08);
+        }
+    }
+
+    .hero-foot { color: #5b6b84; font-size: .75rem; }
+}
+
+.auth-form-wrap {
+    display: grid;
+    place-items: center;
+    padding: 2.5rem 1.5rem;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+
+    h2 { font-size: 1.6rem; font-weight: 800; color: var(--ink-900); letter-spacing: -.03em; }
+    .lead { font-size: .9rem; color: var(--ink-500); }
+
+    .form-control { padding: .7rem .95rem; }
+    .btn-lg { padding: .75rem 1rem; font-size: .92rem; }
+}
+
+@media (max-width: 991.98px) {
+    .auth-page { grid-template-columns: 1fr; }
+    .auth-hero { display: none; }
+}

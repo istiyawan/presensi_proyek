@@ -1,0 +1,78 @@
+// Tema dasar Bootstrap. Warna brand runtime (pengaturan aplikasi) lewat CSS var --brand.
+
+$font-family-sans-serif: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+$font-size-base: .875rem;
+$line-height-base: 1.55;
+$headings-font-weight: 700;
+$headings-color: #0b1324;
+
+$primary: #1e5aa8;
+$secondary: #64748b;
+$success: #0f9d58;
+$info: #2a78d6;
+$warning: #e79a00;
+$danger: #d03b3b;
+$light: #f4f6fa;
+$dark: #0b1324;
+
+$body-bg: #f4f6fa;
+$body-color: #1e293b;
+$body-secondary-color: #64748b;
+$border-color: #e6eaf0;
+$link-decoration: none;
+
+$border-radius: .625rem;
+$border-radius-sm: .5rem;
+$border-radius-lg: .875rem;
+$border-radius-xl: 1.125rem;
+
+$box-shadow-sm: 0 1px 2px rgba(15, 23, 42, .04);
+$box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
+$box-shadow-lg: 0 24px 64px -24px rgba(15, 23, 42, .28);
+
+$card-border-color: rgba(15, 23, 42, .06);
+$card-border-radius: 1rem;
+$card-cap-bg: transparent;
+$card-spacer-y: 1.25rem;
+$card-spacer-x: 1.375rem;
+
+$input-border-color: #dce2ea;
+$input-padding-y: .55rem;
+$input-padding-x: .85rem;
+$input-placeholder-color: #94a3b8;
+$input-focus-box-shadow: 0 0 0 .2rem rgba(30, 90, 168, .12);
+$form-label-font-weight: 600;
+$form-label-color: #334155;
+$form-label-font-size: .8125rem;
+
+$btn-padding-y: .55rem;
+$btn-padding-x: 1rem;
+$btn-font-weight: 600;
+$btn-box-shadow: none;
+
+$modal-content-border-radius: 1.125rem;
+$modal-content-border-color: transparent;
+$modal-header-border-color: $border-color;
+$modal-footer-border-color: $border-color;
+$modal-backdrop-bg: #0b1324;
+$modal-backdrop-opacity: .45;
+
+$dropdown-border-color: rgba(15, 23, 42, .08);
+$dropdown-box-shadow: $box-shadow-lg;
+$dropdown-link-hover-bg: #f1f5f9;
+$dropdown-padding-x: .375rem;
+$dropdown-item-padding-y: .5rem;
+$dropdown-item-padding-x: .75rem;
+
+$table-cell-padding-y: .8rem;
+$table-cell-padding-x: .9rem;
+$table-border-color: #eef1f5;
+
+$nav-tabs-border-color: $border-color;
+$badge-font-weight: 600;
+$badge-padding-y: .4em;
+$badge-padding-x: .7em;
+$badge-border-radius: 999px;
+
+$tooltip-bg: #0b1324;
+$enable-negative-margins: true;

@@ -1,0 +1,197 @@
+// DataTables
+.dt-container {
+    .dt-layout-row:first-child { padding: 0 0 1rem; margin: 0; }
+    .dt-layout-row:last-child { padding: 1rem 0 0; margin: 0; }
+    .dt-search input { min-width: 240px; padding-left: 2.1rem; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0'/%3E%3C/svg%3E") no-repeat .75rem center; }
+    .dt-search label, .dt-length label { color: var(--ink-500); font-size: .8rem; }
+    .dt-info { color: var(--ink-500); font-size: .8rem; }
+    div.dt-processing {
+        border-radius: .75rem;
+        border: 1px solid var(--line);
+        box-shadow: $box-shadow-lg;
+        font-weight: 600;
+        font-size: .8rem;
+        padding: .75rem 1rem;
+        > div:last-child > div { background: var(--brand); }
+    }
+}
+
+table.dataTable, .table-premium {
+    --bs-table-hover-bg: #f8fafc;
+    margin: 0 !important;
+    border-collapse: separate !important;
+    border-spacing: 0;
+
+    > thead > tr > th {
+        background: #f8fafc;
+        color: var(--ink-500);
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+        border-bottom: 1px solid var(--line) !important;
+        border-top: 1px solid var(--line);
+        white-space: nowrap;
+
+        &:first-child { border-left: 1px solid var(--line); border-top-left-radius: .75rem; }
+        &:last-child { border-right: 1px solid var(--line); border-top-right-radius: .75rem; }
+    }
+
+    > tbody > tr > td {
+        vertical-align: middle;
+        border-color: var(--line-soft);
+        color: var(--ink-700);
+    }
+
+    > tbody > tr:last-child > td { border-bottom: 0; }
+}
+
+.table-wrap {
+    border: 1px solid var(--line);
+    border-radius: .875rem;
+    overflow: hidden;
+
+    table.dataTable > thead > tr > th, .table-premium > thead > tr > th {
+        border-top: 0;
+        &:first-child { border-left: 0; border-top-left-radius: 0; }
+        &:last-child { border-right: 0; border-top-right-radius: 0; }
+    }
+}
+
+.dt-paging .pagination {
+    gap: .25rem;
+
+    .page-link {
+        border-radius: .5rem !important;
+        border: 1px solid var(--line);
+        color: var(--ink-700);
+        font-weight: 600;
+        font-size: .8rem;
+        min-width: 2rem;
+        text-align: center;
+    }
+
+    .active .page-link { background: var(--brand); border-color: var(--brand); color: #fff; }
+    .disabled .page-link { color: var(--ink-400); background: #fff; }
+}
+
+table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control::before {
+    border-color: var(--brand) !important;
+}
+
+// Select2
+.select2-container--bootstrap-5 {
+    .select2-selection {
+        min-height: calc(1.55em + 1.1rem + 2px);
+        border-color: $input-border-color;
+        border-radius: $border-radius;
+        box-shadow: $box-shadow-sm;
+        font-size: $font-size-base;
+    }
+
+    &.select2-container--focus .select2-selection,
+    &.select2-container--open .select2-selection {
+        border-color: rgba(var(--brand-rgb), .55);
+        box-shadow: 0 0 0 .2rem rgba(var(--brand-rgb), .12);
+    }
+
+    .select2-dropdown {
+        border-color: rgba(15, 23, 42, .08);
+        border-radius: .75rem !important;
+        box-shadow: $box-shadow-lg;
+        overflow: hidden;
+        font-size: $font-size-base;
+
+        .select2-results__options .select2-results__option {
+            border-radius: .45rem;
+            margin: 2px 4px;
+
+            &.select2-results__option--highlighted { background: rgba(var(--brand-rgb), .08); color: var(--ink-900); }
+            &.select2-results__option--selected { background: var(--brand); color: #fff; }
+        }
+    }
+}
+
+// Flatpickr
+.flatpickr-calendar {
+    border-radius: .875rem;
+    border: 1px solid rgba(15, 23, 42, .08);
+    box-shadow: $box-shadow-lg;
+    font-family: inherit;
+
+    &.arrowTop::before, &.arrowTop::after { display: none; }
+
+    .flatpickr-day {
+        border-radius: .5rem;
+
+        &.selected, &.startRange, &.endRange, &.selected:hover {
+            background: var(--brand);
+            border-color: var(--brand);
+        }
+
+        &.inRange { background: rgba(var(--brand-rgb), .1); border-color: transparent; box-shadow: -5px 0 0 rgba(var(--brand-rgb), .1), 5px 0 0 rgba(var(--brand-rgb), .1); }
+        &.today { border-color: rgba(var(--brand-rgb), .5); }
+    }
+}
+
+// SweetAlert2
+div:where(.swal2-container) {
+    div:where(.swal2-popup) {
+        border-radius: 1.125rem;
+        font-family: inherit;
+        padding: 1.75rem 1.5rem 1.5rem;
+    }
+
+    h2:where(.swal2-title) { font-size: 1.15rem; color: var(--ink-900); }
+    div:where(.swal2-html-container) { font-size: .88rem; color: var(--ink-500); }
+
+    .swal2-actions { gap: .5rem; }
+    .swal2-styled { margin: 0; }
+
+    &.swal2-backdrop-show { background: rgba(11, 19, 36, .45); }
+
+    .swal2-toast {
+        border-radius: .875rem !important;
+        box-shadow: $box-shadow-lg !important;
+        padding: .75rem 1rem !important;
+
+        .swal2-title { font-size: .86rem; font-weight: 600; }
+    }
+
+    .swal2-input, .swal2-textarea {
+        font-size: .875rem;
+        border-radius: .625rem;
+        border-color: $input-border-color;
+        box-shadow: none;
+        margin: 1rem 0 0;
+        width: 100%;
+    }
+}
+
+// Leaflet
+.leaflet-container { font-family: inherit; }
+.leaflet-popup-content-wrapper { border-radius: .75rem; box-shadow: $box-shadow-lg; }
+.leaflet-popup-content { margin: .75rem .9rem; font-size: .8rem; }
+.leaflet-bar a { color: var(--ink-700); }
+.leaflet-control-zoom { border: 0 !important; box-shadow: $box-shadow !important; border-radius: .6rem !important; overflow: hidden; }
+
+// Chart
+.chart-box { position: relative; height: 280px; }
+.chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+    min-width: 170px;
+    padding: .65rem .8rem;
+    border-radius: .7rem;
+    background: #0b1324;
+    color: #fff;
+    font-size: .76rem;
+    box-shadow: $box-shadow-lg;
+    transition: opacity .1s;
+
+    .tt-title { font-weight: 700; margin-bottom: .35rem; }
+    .tt-row { display: flex; align-items: center; gap: .5rem; padding: .1rem 0; color: #cbd5e1; }
+    .tt-row strong { margin-left: auto; color: #fff; font-variant-numeric: tabular-nums; }
+    .tt-swatch { width: .55rem; height: .55rem; border-radius: .15rem; }
+}
