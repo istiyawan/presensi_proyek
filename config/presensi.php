@@ -58,9 +58,10 @@ return [
     'photo' => [
         'disk' => 'local',
         'max_kb' => 5120,
-        'max_width' => 1080,
+        // Foto diperkecil saat disimpan: sisi terpanjang dibatasi + kompresi JPEG.
+        'max_width' => (int) env('PHOTO_MAX_WIDTH', 640),
         'thumb_width' => 160,
-        'quality' => 75,
+        'quality' => (int) env('PHOTO_QUALITY', 60),
     ],
 
     // Toleransi selisih jam perangkat ke depan (detik) untuk data offline

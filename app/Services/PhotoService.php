@@ -22,10 +22,9 @@ class PhotoService
         $dir = sprintf('attendances/%d/%s', $projectId, now()->format('Y/m'));
         $manager = new ImageManager(new Driver);
 
+        // Batasi sisi terpanjang (selfie umumnya potret) agar ukuran berkas kecil.
         $image = $manager->decodePath($file->getRealPath())->orient();
-        if ($image->width() > $cfg['max_width']) {
-            $image->scale(width: $cfg['max_width']);
-        }
+        $image->scaleDown(width: $cfg['max_width'], height: $cfg['max_width']);
         $photoPath = "{$dir}/{$uuid}_{$suffix}.jpg";
         Storage::disk($cfg['disk'])->put($photoPath, (string) $image->encodeUsingFileExtension('jpg', quality: $cfg['quality']));
 
