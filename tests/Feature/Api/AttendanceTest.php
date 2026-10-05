@@ -246,6 +246,30 @@ class AttendanceTest extends TestCase
             ->assertStatus(409)->assertJsonPath('reason', 'already_checked_in');
     }
 
+    public function test_back_date_before_assignment_start_explains_the_start_date(): void
+    {
+        $project = $this->makeProject();
+        Sanctum::actingAs($this->makeEmployee($project, ['start_date' => '2026-03-10'])->user);
+
+        $this->post('/api/v1/attendance/check-in', $this->attendancePayload($project, ['work_date' => '2026-03-08']), ['Accept' => 'application/json'])
+            ->assertStatus(403)
+            ->assertJsonPath('reason', 'not_assigned')
+            ->assertJsonPath('message', 'Anda baru terdaftar di proyek ini sejak 10 Mar 2026. Presensi tanggal 8 Mar 2026 tidak dapat dilakukan.')
+            ->assertJsonPath('data.start_date', '2026-03-10');
+    }
+
+    public function test_back_date_after_assignment_end_explains_the_end_date(): void
+    {
+        $project = $this->makeProject();
+        Sanctum::actingAs($this->makeEmployee($project, ['end_date' => '2026-03-05'])->user);
+
+        $this->post('/api/v1/attendance/check-in', $this->attendancePayload($project, ['work_date' => '2026-03-08']), ['Accept' => 'application/json'])
+            ->assertStatus(403)
+            ->assertJsonPath('reason', 'not_assigned')
+            ->assertJsonPath('message', 'Penugasan Anda di proyek ini berakhir pada 5 Mar 2026. Presensi tanggal 8 Mar 2026 tidak dapat dilakukan.')
+            ->assertJsonPath('data.end_date', '2026-03-05');
+    }
+
     public function test_malformed_work_date_fails_validation(): void
     {
         $project = $this->makeProject();

@@ -260,11 +260,47 @@ class AttendanceService
     {
         $assignment = $employee->assignmentFor($project->id, $date);
 
-        if (! $assignment || ! $project->is_active || ! $employee->is_active) {
+        if (! $project->is_active || ! $employee->is_active) {
             throw new AttendanceException('Anda tidak terdaftar aktif di proyek ini.', 'not_assigned', 403);
+        }
+        if (! $assignment) {
+            $this->throwOutsideAssignment($employee, $project, $date);
         }
 
         return $assignment->loadMissing('shift');
+    }
+
+    /**
+     * Tanggal presensi di luar masa penugasan — sebutkan tanggal mulai/berakhir penugasan
+     * agar karyawan tahu tanggal mana yang bisa dipilih.
+     */
+    private function throwOutsideAssignment(Employee $employee, Project $project, string $date): never
+    {
+        $label = fn ($d) => CarbonImmutable::parse($d)->translatedFormat('j M Y');
+        $assignments = ProjectEmployee::query()
+            ->where('employee_id', $employee->id)
+            ->where('project_id', $project->id);
+
+        if ($next = (clone $assignments)->whereDate('start_date', '>', $date)->orderBy('start_date')->first()) {
+            throw new AttendanceException(
+                'Anda baru terdaftar di proyek ini sejak '.$label($next->start_date).'. '
+                .'Presensi tanggal '.$label($date).' tidak dapat dilakukan.',
+                'not_assigned',
+                403,
+                ['start_date' => $next->start_date->toDateString()],
+            );
+        }
+        if ($last = (clone $assignments)->whereDate('end_date', '<', $date)->orderByDesc('end_date')->first()) {
+            throw new AttendanceException(
+                'Penugasan Anda di proyek ini berakhir pada '.$label($last->end_date).'. '
+                .'Presensi tanggal '.$label($date).' tidak dapat dilakukan.',
+                'not_assigned',
+                403,
+                ['end_date' => $last->end_date->toDateString()],
+            );
+        }
+
+        throw new AttendanceException('Anda tidak terdaftar aktif di proyek ini.', 'not_assigned', 403);
     }
 
     private function assertCheckinWindow(?Shift $shift, CarbonImmutable $time): void
