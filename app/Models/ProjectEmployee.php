@@ -32,9 +32,10 @@ class ProjectEmployee extends Pivot
         return $this->belongsTo(Project::class);
     }
 
+    /** Termasuk karyawan yang diarsipkan: penugasannya tetap muncul di laporan periode lampau. */
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class)->withTrashed();
     }
 
     public function shift(): BelongsTo

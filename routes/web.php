@@ -22,6 +22,7 @@ Route::get('login', [AuthController::class, 'show'])->name('login');
 Route::post('login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('branding/logo', [AppSettingController::class, 'logo'])->name('branding.logo');
+Route::get('privacy-policy', [AuthController::class, 'privacy'])->name('privacy');
 
 Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -58,8 +59,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('employees/attach', [EmployeeController::class, 'attach'])->name('employees.attach');
     Route::post('employees/{employee}/reset-password', [EmployeeController::class, 'resetPassword'])->name('employees.reset-password');
     Route::post('employees/{employee}/reset-device', [EmployeeController::class, 'resetDevice'])->name('employees.reset-device');
+    Route::post('employees/{employee}/restore', [EmployeeController::class, 'restore'])->name('employees.restore')->withTrashed();
     Route::delete('employees/{employee}/assignment', [EmployeeController::class, 'detach'])->name('employees.detach');
-    Route::resource('employees', EmployeeController::class)->only(['index', 'store', 'show', 'update']);
+    Route::resource('employees', EmployeeController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
 
     Route::resource('shifts', ShiftController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('locations', LocationController::class)->only(['index', 'store', 'update', 'destroy']);

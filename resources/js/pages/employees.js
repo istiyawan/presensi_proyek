@@ -3,6 +3,7 @@ import Swal from 'sweetalert2';
 import { serverTable, reload } from '../core/table';
 import { avatar, confirmAction, escapeHtml, toast } from '../core/ui';
 import { fillForm, resetForm } from '../core/shell';
+import { errorMessage } from '../core/http';
 
 const routes = {
     data: '/employees/data',
@@ -11,6 +12,8 @@ const routes = {
     resetPassword: (id) => `/employees/${id}/reset-password`,
     resetDevice: (id) => `/employees/${id}/reset-device`,
     detach: (id) => `/employees/${id}/assignment`,
+    destroy: (id) => `/employees/${id}`,
+    restore: (id) => `/employees/${id}/restore`,
 };
 
 export default function () {
@@ -26,8 +29,9 @@ export default function () {
         columns: [
             {
                 data: 'name',
+                responsivePriority: 1,
                 render: (v, _t, r) => `
-                    <a href="#" class="person text-reset" data-edit="${r.employee_id}">
+                    <a href="#" class="person text-reset" ${r.archived ? '' : `data-edit="${r.employee_id}"`}>
                         ${avatar(r.full_name)}
                         <span class="min-w-0">
                             <span class="person-name d-block">${escapeHtml(v)}</span>
@@ -60,21 +64,31 @@ export default function () {
             {
                 data: 'is_active',
                 orderable: false,
-                render: (v) => (v ? '<span class="badge-status soft-success">Aktif</span>' : '<span class="badge-status soft-slate">Nonaktif</span>'),
+                render: (v, _t, r) => {
+                    if (r.archived) return `<span class="badge-status soft-slate"><i class="bi bi-archive me-1"></i>Diarsipkan</span><div class="fs-8 text-muted">${r.archived_at || ''}</div>`;
+                    return v ? '<span class="badge-status soft-success">Aktif</span>' : '<span class="badge-status soft-slate">Nonaktif</span>';
+                },
             },
             {
                 data: 'employee_id',
                 orderable: false,
-                className: 'text-end',
-                render: (id, _t, r) => `
-                    <div class="dropdown">
-                        <button class="btn btn-soft btn-icon btn-sm" data-bs-toggle="dropdown" aria-label="Aksi"><i class="bi bi-three-dots"></i></button>
-                        <div class="dropdown-menu dropdown-menu-end">
-                            <button class="dropdown-item" data-edit="${id}"><i class="bi bi-pencil"></i>Ubah data</button>
-                            <button class="dropdown-item" data-reset-password="${id}" data-name="${escapeHtml(r.name)}"><i class="bi bi-key"></i>Reset password</button>
-                            <button class="dropdown-item" data-reset-device="${id}" data-name="${escapeHtml(r.name)}" ${r.device ? '' : 'disabled'}><i class="bi bi-phone-flip"></i>Reset perangkat</button>
-                            <div class="dropdown-divider"></div>
-                            <button class="dropdown-item text-danger" data-detach="${id}" data-name="${escapeHtml(r.name)}"><i class="bi bi-person-dash"></i>Keluarkan dari proyek</button>
+                className: 'text-end text-nowrap',
+                responsivePriority: 1,
+                render: (id, _t, r) => r.archived
+                    ? `<button class="btn btn-soft btn-sm" data-restore="${id}" data-name="${escapeHtml(r.name)}"><i class="bi bi-arrow-counterclockwise me-1"></i>Pulihkan</button>`
+                    : `
+                    <div class="d-inline-flex gap-1">
+                        <button class="btn btn-soft btn-icon btn-sm" data-edit="${id}" data-bs-toggle="tooltip" title="Ubah data" aria-label="Ubah data"><i class="bi bi-pencil"></i></button>
+                        <div class="dropdown">
+                            <button class="btn btn-soft btn-icon btn-sm" data-bs-toggle="dropdown" aria-label="Aksi lain"><i class="bi bi-three-dots"></i></button>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <button class="dropdown-item" data-edit="${id}"><i class="bi bi-pencil"></i>Ubah data</button>
+                                <button class="dropdown-item" data-reset-password="${id}" data-name="${escapeHtml(r.name)}"><i class="bi bi-key"></i>Reset password</button>
+                                <button class="dropdown-item" data-reset-device="${id}" data-name="${escapeHtml(r.name)}" ${r.device ? '' : 'disabled'}><i class="bi bi-phone-flip"></i>Reset perangkat</button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item text-danger" data-detach="${id}" data-name="${escapeHtml(r.name)}"><i class="bi bi-person-dash"></i>Keluarkan dari proyek</button>
+                                <button class="dropdown-item text-danger" data-delete-employee="${id}" data-name="${escapeHtml(r.name)}"><i class="bi bi-trash"></i>Hapus karyawan</button>
+                            </div>
                         </div>
                     </div>`,
             },
@@ -108,14 +122,17 @@ export default function () {
 
     $(document).on('click', '[data-edit]', function (e) {
         e.preventDefault();
-        const id = $(this).data('edit');
+        openEdit($(this).data('edit'));
+    });
+
+    function openEdit(id) {
         $.get(routes.show(id)).done((data) => {
             resetForm($form);
             setMode('edit', id);
             fillForm($form, { ...data, password: '' });
             modal.show();
         });
-    });
+    }
 
     $('#btnGenPassword').on('click', () => {
         const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -194,6 +211,40 @@ export default function () {
             toast(res.message);
             reload(table);
         });
+    });
+
+    $(document).on('click', '[data-delete-employee]', async function () {
+        const ok = await confirmAction({
+            title: 'Hapus karyawan?',
+            text: `<strong>${$(this).data('name')}</strong> tidak bisa login dan presensi lagi.<br>
+                   <span class="fs-7 text-muted">Bila sudah punya riwayat presensi/izin, data <strong>diarsipkan</strong> (riwayat & laporan tetap utuh, bisa dipulihkan dari tab Arsip).
+                   Bila belum, data & akun dihapus permanen.</span>`,
+            confirmText: 'Hapus',
+            danger: true,
+        });
+        if (!ok) return;
+        $.ajax({ url: routes.destroy($(this).data('delete-employee')), method: 'DELETE' })
+            .done((res) => {
+                toast(res.message);
+                reload(table);
+            })
+            .fail((xhr) => xhr.status === 422 && toast(errorMessage(xhr), 'warning'));
+    });
+
+    $(document).on('click', '[data-restore]', async function () {
+        const ok = await confirmAction({
+            title: 'Pulihkan karyawan?',
+            text: `Akun <strong>${$(this).data('name')}</strong> diaktifkan kembali. Setelah itu atur tanggal penugasan bila akan bertugas lagi.`,
+            confirmText: 'Pulihkan',
+        });
+        if (!ok) return;
+        $.post(routes.restore($(this).data('restore')))
+            .done((res) => {
+                toast(res.message);
+                reload(table);
+                openEdit(res.data.id);
+            })
+            .fail((xhr) => xhr.status === 422 && toast(errorMessage(xhr), 'warning'));
     });
 
     function setMode(mode, id = null) {

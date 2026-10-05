@@ -113,6 +113,7 @@ export function modeBadge(mode) {
 
 export const FLAGS = {
     missing_checkout: { label: 'Lupa check-out', icon: 'bi-door-open' },
+    backdated: { label: 'Tanggal mundur', icon: 'bi-calendar-minus' },
     time_suspicious: { label: 'Waktu perangkat meragukan', icon: 'bi-clock-history' },
     low_accuracy: { label: 'Akurasi GPS rendah', icon: 'bi-reception-1' },
 };

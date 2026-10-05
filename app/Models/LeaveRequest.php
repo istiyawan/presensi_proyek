@@ -28,9 +28,10 @@ class LeaveRequest extends Model
         return $this->belongsTo(Project::class);
     }
 
+    /** Termasuk karyawan yang diarsipkan agar riwayat izin tetap terbaca. */
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class)->withTrashed();
     }
 
     public function approver(): BelongsTo

@@ -23,7 +23,7 @@ class AttendanceService
 
     /**
      * @param  array{uuid: string, latitude: float, longitude: float, accuracy?: ?float, is_mock?: bool,
-     *               note?: ?string, is_offline?: bool, captured_at?: ?string, device_time?: ?string,
+     *               note?: ?string, is_offline?: bool, work_date?: ?string, captured_at?: ?string, device_time?: ?string,
      *               device?: ?array, flags?: ?array}  $data
      */
     public function checkIn(Employee $employee, Project $project, array $data, UploadedFile $photo): Attendance
@@ -71,7 +71,11 @@ class AttendanceService
                 ->first();
 
             if ($attendance?->check_in_at) {
-                throw new AttendanceException('Anda sudah check-in hari ini.', 'already_checked_in', 409);
+                throw new AttendanceException(
+                    $this->isBackdated($project, $time) ? 'Anda sudah check-in pada tanggal '.$time->translatedFormat('j M Y').'.' : 'Anda sudah check-in hari ini.',
+                    'already_checked_in',
+                    409,
+                );
             }
 
             // Baris alpha/libur dari scheduler di-overwrite oleh presensi yang masuk belakangan (offline)
@@ -96,7 +100,7 @@ class AttendanceService
                 ? 'pending'
                 : 'none';
 
-            $this->applyFlags($attendance, $data, $s);
+            $this->applyFlags($attendance, $data, $s, $this->isBackdated($project, $time));
             $attendance->save();
 
             return $attendance;
@@ -120,15 +124,23 @@ class AttendanceService
                 ->lockForUpdate()
                 ->first();
 
+            $backdated = $this->isBackdated($project, $time);
+
             if (! $attendance) {
                 throw new AttendanceException(
-                    "Tidak ada check-in dalam {$s['max_work_hours']} jam terakhir. Bila lupa check-out, hubungi admin untuk koreksi.",
+                    $backdated
+                        ? 'Tidak ada check-in yang bisa ditutup pada '.$time->translatedFormat('j M Y').' pukul '.$time->format('H:i').'. Lakukan check-in untuk tanggal tersebut terlebih dahulu.'
+                        : "Tidak ada check-in dalam {$s['max_work_hours']} jam terakhir. Bila lupa check-out, hubungi admin untuk koreksi.",
                     'no_checkin',
                     409,
                 );
             }
             if ($attendance->check_out_at) {
-                throw new AttendanceException('Anda sudah check-out hari ini.', 'already_checked_out', 409);
+                throw new AttendanceException(
+                    $backdated ? 'Anda sudah check-out pada tanggal '.$time->translatedFormat('j M Y').'.' : 'Anda sudah check-out hari ini.',
+                    'already_checked_out',
+                    409,
+                );
             }
 
             $assignment = $this->assignment($employee, $project, $attendance->work_date->toDateString());
@@ -146,7 +158,7 @@ class AttendanceService
                 $attendance->offsite_approval = 'pending';
             }
 
-            $this->applyFlags($attendance, $data, $s);
+            $this->applyFlags($attendance, $data, $s, $backdated);
             $attendance->save();
 
             return $attendance;
@@ -184,13 +196,14 @@ class AttendanceService
 
     /**
      * Waktu presensi: waktu server untuk online, waktu terpercaya dari aplikasi untuk offline.
+     * Online dengan `work_date`: tanggal pilihan karyawan + jam server saat ini.
      */
     private function resolveTime(Project $project, array $data, array $s): CarbonImmutable
     {
         $now = CarbonImmutable::now($project->timezone);
 
         if (! $this->isOffline($data)) {
-            return $now;
+            return filled($data['work_date'] ?? null) ? $this->backdatedTime($now, $data['work_date'], $s) : $now;
         }
 
         if (! $s['allow_offline']) {
@@ -213,6 +226,34 @@ class AttendanceService
         }
 
         return $captured;
+    }
+
+    private function backdatedTime(CarbonImmutable $now, string $workDate, array $s): CarbonImmutable
+    {
+        $date = CarbonImmutable::createFromFormat('!Y-m-d', $workDate, $now->timezone);
+        $today = $now->startOfDay();
+        $maxDays = $s['backdate_max_days'] === null ? null : (int) $s['backdate_max_days'];
+
+        if ($date->gt($today)) {
+            throw new AttendanceException('Tanggal presensi tidak boleh di masa depan.', 'invalid_work_date');
+        }
+        if ($maxDays !== null && $date->lt($today->subDays($maxDays))) {
+            throw new AttendanceException(
+                $maxDays > 0
+                    ? "Tanggal presensi paling lama {$maxDays} hari ke belakang. Hubungi admin untuk koreksi."
+                    : 'Presensi tanggal mundur tidak diizinkan di proyek ini.',
+                'backdate_not_allowed',
+                context: ['max_days' => $maxDays],
+            );
+        }
+
+        return $now->setDate($date->year, $date->month, $date->day);
+    }
+
+    /** Tanggal presensi bukan tanggal hari ini di zona waktu proyek. */
+    private function isBackdated(Project $project, CarbonImmutable $time): bool
+    {
+        return $time->toDateString() < CarbonImmutable::now($project->timezone)->toDateString();
     }
 
     private function assignment(Employee $employee, Project $project, string $date): ProjectEmployee
@@ -351,8 +392,12 @@ class AttendanceService
         ];
     }
 
-    private function applyFlags(Attendance $attendance, array $data, array $s): void
+    private function applyFlags(Attendance $attendance, array $data, array $s, bool $backdated): void
     {
+        if ($backdated && ! $this->isOffline($data)) {
+            $attendance->addFlag(Attendance::FLAG_BACKDATED);
+        }
+
         foreach ((array) ($data['flags'] ?? []) as $flag) {
             if ($flag === Attendance::FLAG_TIME_SUSPICIOUS) {
                 $attendance->addFlag($flag);

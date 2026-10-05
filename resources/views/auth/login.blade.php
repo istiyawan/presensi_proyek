@@ -63,6 +63,7 @@
             </form>
 
             <p class="text-muted fs-8 mt-4 mb-0 text-center">Karyawan lapangan melakukan presensi melalui aplikasi mobile.</p>
+            <p class="fs-8 mt-2 mb-0 text-center"><a href="{{ route('privacy') }}">Privacy Policy</a></p>
         </div>
     </section>
 </div>

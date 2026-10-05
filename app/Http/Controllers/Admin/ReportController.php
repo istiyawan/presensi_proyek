@@ -87,10 +87,6 @@ class ReportController extends AdminController
             'to.required_if' => 'Pilih rentang tanggal.',
         ]);
 
-        if ($data['format'] === 'xlsx' && $data['type'] !== 'recap') {
-            return $this->failed('Format Excel hanya tersedia untuk laporan rekap.');
-        }
-
         $params = $data['range_mode'] === 'period'
             ? ['period' => (int) $data['period']]
             : ['from' => $data['from'], 'to' => $data['to']];
@@ -102,7 +98,8 @@ class ReportController extends AdminController
 
         $params += array_filter([
             'employee_id' => $data['type'] === 'individual' ? (int) $data['employee_id'] : null,
-            'photos' => $data['type'] !== 'recap' ? $request->boolean('photos') : null,
+            // Foto hanya untuk PDF
+            'photos' => $data['type'] !== 'recap' && $data['format'] === 'pdf' ? $request->boolean('photos') : null,
         ], fn ($v) => $v !== null);
 
         $job = ReportJob::create([

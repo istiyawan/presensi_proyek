@@ -31,7 +31,9 @@ class AdminPanelTest extends TestCase
         $this->makeProject();
         $this->admin();
 
-        $this->get('/login')->assertOk()->assertSee('Selamat datang');
+        $this->get('/login')->assertOk()->assertSee('Selamat datang')->assertSee(route('privacy'));
+        // Kebijakan privasi bisa dibuka tanpa login (dipakai juga untuk toko aplikasi)
+        $this->get('/privacy-policy')->assertOk()->assertSee('Privacy Policy');
         $this->post('/login', ['username' => 'adminsuper_admin', 'password' => 'password'])->assertRedirect('/');
         $this->get('/')->assertOk();
     }
@@ -76,6 +78,71 @@ class AdminPanelTest extends TestCase
         $this->assertSame('Ahli K3', $employee->position->name);
         $this->assertTrue($employee->user->hasRole(User::ROLE_TEAM_LEADER));
         $this->assertTrue($project->employees()->whereKey($employee->id)->exists());
+    }
+
+    public function test_delete_employee_without_history_removes_account(): void
+    {
+        $project = $this->makeProject();
+        $employee = $this->makeEmployee($project);
+        $userId = $employee->user_id;
+        $this->actingAs($this->admin());
+
+        $this->deleteJson("/employees/{$employee->id}")->assertOk();
+
+        $this->assertNull(Employee::withTrashed()->find($employee->id));
+        $this->assertNull(User::find($userId));
+        $this->assertFalse($project->employees()->whereKey($employee->id)->exists());
+    }
+
+    public function test_delete_employee_with_history_archives_and_keeps_attendance(): void
+    {
+        $project = $this->makeProject();
+        $employee = $this->makeEmployee($project, ['is_team_leader' => true]);
+        $employee->user->assignRole(User::ROLE_TEAM_LEADER);
+        $attendance = Attendance::create([
+            'employee_id' => $employee->id, 'project_id' => $project->id, 'work_date' => '2026-10-02',
+            'check_in_at' => '2026-10-02 08:00:00', 'status' => 'hadir',
+        ]);
+        $this->actingAs($this->admin());
+
+        $this->deleteJson("/employees/{$employee->id}")->assertOk();
+
+        $employee = Employee::withTrashed()->find($employee->id);
+        $this->assertTrue($employee->trashed());
+        $this->assertFalse($employee->user->is_active);
+        $this->assertFalse($employee->user->hasRole(User::ROLE_TEAM_LEADER));
+        $this->assertNotNull($employee->assignmentFor($project->id, '2026-10-02'));
+        $this->assertNull($employee->assignmentFor($project->id, now($project->timezone)->toDateString()));
+        $this->assertSame($employee->full_name, $attendance->fresh()->employee->full_name);
+
+        // Halaman yang menampilkan riwayat tetap jalan
+        $this->getJson('/attendances/data?draw=1&start=0&length=10')->assertOk()->assertJsonPath('recordsTotal', 1);
+        $this->get('/attendances')->assertOk();
+        $this->get('/settings/project?tab=signatories')->assertOk();
+
+        // Muncul di tab Arsip, tidak di tab Semua
+        $this->getJson('/employees/data?draw=1&start=0&length=10&status=archived')->assertJsonPath('recordsTotal', 1);
+        $this->getJson('/employees/data?draw=1&start=0&length=10&status=all')->assertJsonPath('recordsTotal', 0);
+
+        $this->postJson("/employees/{$employee->id}/restore")->assertOk();
+        $employee->refresh();
+        $this->assertFalse($employee->trashed());
+        $this->assertTrue($employee->is_active && $employee->user->is_active);
+    }
+
+    public function test_only_super_admin_can_delete_employee_in_other_projects(): void
+    {
+        $project = $this->makeProject();
+        $employee = $this->makeEmployee($project);
+        $this->makeProject()->employees()->attach($employee->id, ['start_date' => '2026-10-01']);
+
+        $admin = $this->admin(User::ROLE_PROJECT_ADMIN);
+        $admin->managedProjects()->attach($project);
+        $this->actingAs($admin)->deleteJson("/employees/{$employee->id}")->assertUnprocessable();
+        $this->assertNotNull($employee->fresh());
+
+        $this->actingAs($this->admin())->deleteJson("/employees/{$employee->id}")->assertOk();
+        $this->assertNull(Employee::withTrashed()->find($employee->id));
     }
 
     public function test_manual_correction_handles_checkout_after_midnight(): void
@@ -268,5 +335,26 @@ class AdminPanelTest extends TestCase
         $this->assertTrue($s['allow_offsite']);
         $this->assertFalse($s['require_checkout_in_location']);
         $this->assertSame(24, $s['max_work_hours']);
+        $this->assertNull($s['backdate_max_days']);
+    }
+
+    public function test_backdate_limit_setting_accepts_days_or_empty(): void
+    {
+        $project = $this->makeProject();
+        $this->actingAs($this->admin());
+        $payload = [
+            'allow_offsite' => '0', 'offsite_scope' => 'all', 'offsite_requires_approval' => '0', 'offsite_requires_note' => '0',
+            'max_gps_accuracy_m' => '40', 'block_mock_location' => '1', 'require_checkout_in_location' => '0', 'max_work_hours' => '20',
+        ];
+        $settings = app(SettingService::class);
+
+        $this->putJson('/settings/project/location', $payload + ['backdate_max_days' => '7'])->assertOk();
+        $this->assertSame(7, $settings->project($project, 'backdate_max_days'));
+
+        $this->putJson('/settings/project/location', $payload + ['backdate_max_days' => ''])->assertOk();
+        $this->assertNull($settings->project($project, 'backdate_max_days'));
+
+        $this->putJson('/settings/project/location', $payload + ['backdate_max_days' => '-1'])
+            ->assertStatus(422)->assertJsonValidationErrors('backdate_max_days');
     }
 }

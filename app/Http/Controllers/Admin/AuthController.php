@@ -22,6 +22,12 @@ class AuthController extends Controller
             : view('auth.login', ['appSettings' => app(SettingService::class)->app()]);
     }
 
+    /** Halaman publik — juga dipakai sebagai URL kebijakan privasi di Play Store / App Store. */
+    public function privacy(SettingService $settings): View
+    {
+        return view('legal.privacy', ['appSettings' => $settings->app()]);
+    }
+
     public function login(Request $request, ProjectAccess $access): RedirectResponse
     {
         $credentials = $request->validate([

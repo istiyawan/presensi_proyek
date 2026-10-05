@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\Employee;
 use App\Models\Project;
 use App\Models\ReportJob;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -20,6 +22,15 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class ReportGenerator
 {
+    /** Kolom sama dengan PDF individual (+ Keterangan, di PDF tampil di bawah status). */
+    private const DETAIL_HEADERS_INDIVIDUAL = ['Tanggal', 'Nama', 'Jabatan', 'Shift', 'Check-in', 'Check-out',
+        'Koordinat Check-in', 'Koordinat Check-out', 'Status', 'Keterangan', 'Durasi'];
+
+    private const HEADER_STYLE = [
+        'font' => ['bold' => true],
+        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E3F0FB']],
+    ];
+
     public function __construct(private ReportService $reports, private SettingService $settings) {}
 
     public function generate(ReportJob $job): string
@@ -39,6 +50,7 @@ class ReportGenerator
         $content = match ([$job->type, $job->format]) {
             ['recap', 'xlsx'] => $this->recapXlsx($project, $base),
             ['recap', 'pdf'] => $this->pdf('reports.pdf.recap', $base + ['recap' => $this->reports->recap($project, $range['from'], $range['to'])]),
+            ['individual', 'xlsx'], ['combined', 'xlsx'] => $this->individualXlsx($project, $job, $base),
             default => $this->individualPdf($project, $job, $base),
         };
 
@@ -51,17 +63,148 @@ class ReportGenerator
     private function individualPdf(Project $project, ReportJob $job, array $base): string
     {
         $withPhotos = (bool) ($job->params['photos'] ?? $this->settings->project($project, 'report_show_photo'));
-        $ids = $job->type === 'individual' ? [(int) $job->params['employee_id']] : null;
+        $sections = $this->sections($project, $job, $base, $withPhotos);
 
-        $sections = $this->reports->assignments($project, $base['from'], $base['to'], $ids)
+        return $this->pdf('reports.pdf.individual', $base + ['sections' => $sections, 'withPhotos' => $withPhotos]);
+    }
+
+    /**
+     * Baris laporan per karyawan; laporan gabungan melewati karyawan tanpa data.
+     *
+     * @return Collection<int, array{employee: Employee, rows: list<array>}>
+     */
+    private function sections(Project $project, ?ReportJob $job, array $base, bool $withPhotos): Collection
+    {
+        $individual = $job?->type === 'individual';
+        $ids = $individual ? [(int) $job->params['employee_id']] : null;
+
+        return $this->reports->assignments($project, $base['from'], $base['to'], $ids)
             ->map(fn ($assignment) => [
                 'employee' => $assignment->employee,
                 'rows' => $this->reports->individualRows($project, $assignment, $base['from'], $base['to'], $withPhotos),
             ])
-            ->filter(fn ($s) => $job->type === 'individual' || $s['rows'])
+            ->filter(fn ($s) => $individual || $s['rows'])
             ->values();
+    }
 
-        return $this->pdf('reports.pdf.individual', $base + ['sections' => $sections, 'withPhotos' => $withPhotos]);
+    /**
+     * Excel laporan individual / semua karyawan: satu sheet per karyawan (format sama dengan PDF);
+     * laporan gabungan ditambah sheet "Semua Karyawan" berisi seluruh baris untuk filter / pivot.
+     */
+    private function individualXlsx(Project $project, ReportJob $job, array $base): string
+    {
+        $book = new Spreadsheet;
+        $book->getProperties()->setTitle($base['title'])->setCreator($this->settings->app('app_name'));
+        $book->removeSheetByIndex(0);
+
+        $sections = $this->sections($project, $job, $base, false);
+
+        if ($job->type === 'combined') {
+            $this->detailSheet($book->createSheet(), $sections, 'Semua Karyawan');
+        }
+
+        $used = ['semua karyawan'];
+        foreach ($sections as $section) {
+            $this->employeeSheet($book->createSheet(), $section, $base, $used);
+        }
+
+        if ($book->getSheetCount() === 0) {
+            $book->createSheet()->setTitle('Laporan')->setCellValue('A1', 'Tidak ada data pada periode ini.');
+        }
+        $book->setActiveSheetIndex(0);
+
+        return $this->xlsx($book);
+    }
+
+    private function employeeSheet(Worksheet $sheet, array $section, array $base, array &$used): void
+    {
+        $employee = $section['employee'];
+        $sheet->setTitle($this->sheetTitle($employee->display_name, $used));
+
+        $sheet->setCellValue('A1', 'Laporan Absensi Harian');
+        $sheet->setCellValue('A2', 'Periode: '.$base['from']->format('d/m/Y').' - '.$base['to']->format('d/m/Y').($base['label'] ? " ({$base['label']})" : ''));
+        $sheet->setCellValue('A3', 'Karyawan: '.$employee->full_name.($employee->nik ? " (NIK {$employee->nik})" : ''));
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+        $sheet->fromArray(self::DETAIL_HEADERS_INDIVIDUAL, null, 'A5');
+        $sheet->getStyle('A5:K5')->applyFromArray(self::HEADER_STYLE);
+
+        $r = 6;
+        foreach ($section['rows'] as $row) {
+            $sheet->fromArray([
+                $row['date'], $row['name'], $row['position'], $row['shift'],
+                $row['check_in'] ?? '-', $row['check_out'] ?? '-', $row['coord_in'] ?? '-', $row['coord_out'] ?? '-',
+                $row['status'], implode(', ', $row['notes']), $row['duration'] ?? '-',
+            ], null, "A{$r}", true);
+            $r++;
+        }
+        if (! $section['rows']) {
+            $sheet->setCellValue("A{$r}", 'Tidak ada data pada periode ini.');
+            $sheet->mergeCells("A{$r}:K{$r}");
+            $sheet->getStyle("A{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $r++;
+        }
+
+        $last = $r - 1;
+        $sheet->getStyle("A5:K{$last}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("E6:H{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        foreach (range('A', 'K') as $c) {
+            $sheet->getColumnDimension($c)->setAutoSize(true);
+        }
+        $sheet->freezePane('A6');
+
+        $this->signatures($sheet, $base['footer'], $last + 3);
+        $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
+    }
+
+    /** Kolom tanda tangan seperti PDF: 1 orang di kanan, 2–4 orang dibagi rata. */
+    private function signatures(Worksheet $sheet, array $footer, int $row): void
+    {
+        $signatories = $footer['signatories']->values();
+        $count = $signatories->count();
+        $place = "{$footer['city']}, {$footer['date']}";
+
+        if ($count === 0) {
+            $sheet->setCellValue("I{$row}", $place);
+
+            return;
+        }
+
+        foreach ($signatories as $i => $sig) {
+            $c = Coordinate::stringFromColumnIndex($count === 1 ? 9 : 2 + intdiv($i * 7, $count - 1));
+            if ($i === $count - 1) {
+                $sheet->setCellValue($c.$row, $place);
+            }
+            $sheet->setCellValue($c.($row + 1), $sig->label);
+            $sheet->setCellValue($c.($row + 2), $sig->organization);
+            $sheet->getStyle($c.($row + 2))->getAlignment()->setWrapText(true);
+            $sheet->setCellValue($c.($row + 6), $sig->name);
+            $sheet->getStyle($c.($row + 6))->getFont()->setBold(true)->setUnderline(true);
+            $sheet->setCellValue($c.($row + 7), $sig->title);
+        }
+    }
+
+    /** Nama sheet Excel: maks. 31 karakter, tanpa []:*?/\ dan unik. */
+    private function sheetTitle(string $name, array &$used): string
+    {
+        $base = mb_substr(trim(preg_replace('/[\[\]:*?\/\\\\]+/', ' ', $name)) ?: 'Karyawan', 0, 28);
+        $title = $base;
+        for ($n = 2; in_array(mb_strtolower($title), $used, true); $n++) {
+            $title = mb_substr($base, 0, 27 - strlen((string) $n))." ({$n})";
+        }
+        $used[] = mb_strtolower($title);
+
+        return $title;
+    }
+
+    private function xlsx(Spreadsheet $book): string
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'rkp');
+        (new Xlsx($book))->save($tmp);
+        $content = file_get_contents($tmp);
+        @unlink($tmp);
+
+        return $content;
     }
 
     private function pdf(string $view, array $data): string
@@ -78,15 +221,10 @@ class ReportGenerator
         $book->getProperties()->setTitle($base['title'])->setCreator($this->settings->app('app_name'));
 
         $this->recapSheet($book->getActiveSheet(), $project, $base);
-        $this->detailSheet($book->createSheet(), $project, $base);
+        $this->detailSheet($book->createSheet(), $this->sections($project, null, $base, false), 'Detail');
         $book->setActiveSheetIndex(0);
 
-        $tmp = tempnam(sys_get_temp_dir(), 'rkp');
-        (new Xlsx($book))->save($tmp);
-        $content = file_get_contents($tmp);
-        @unlink($tmp);
-
-        return $content;
+        return $this->xlsx($book);
     }
 
     private function recapSheet(Worksheet $sheet, Project $project, array $base): void
@@ -151,21 +289,19 @@ class ReportGenerator
         $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
     }
 
-    private function detailSheet(Worksheet $sheet, Project $project, array $base): void
+    /** Seluruh baris dalam satu tabel datar (bisa difilter / pivot). */
+    private function detailSheet(Worksheet $sheet, Collection $sections, string $title): void
     {
-        $sheet->setTitle('Detail');
+        $sheet->setTitle($title);
         $sheet->fromArray(['Tanggal', 'NIK', 'Nama', 'Jabatan', 'Shift', 'Check-in', 'Check-out', 'Koordinat check-in',
             'Koordinat check-out', 'Status', 'Keterangan', 'Durasi', 'Durasi (menit)'], null, 'A1');
-        $sheet->getStyle('A1:M1')->applyFromArray([
-            'font' => ['bold' => true],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E3F0FB']],
-        ]);
+        $sheet->getStyle('A1:M1')->applyFromArray(self::HEADER_STYLE);
 
         $r = 2;
-        foreach ($this->reports->assignments($project, $base['from'], $base['to']) as $assignment) {
-            foreach ($this->reports->individualRows($project, $assignment, $base['from'], $base['to'], false) as $row) {
+        foreach ($sections as $section) {
+            foreach ($section['rows'] as $row) {
                 $sheet->fromArray([
-                    $row['date'], $assignment->employee->nik, $row['name'], $row['position'], $row['shift'],
+                    $row['date'], $section['employee']->nik, $row['name'], $row['position'], $row['shift'],
                     $row['check_in'], $row['check_out'], $row['coord_in'], $row['coord_out'], $row['status'],
                     implode(', ', $row['notes']), $row['duration'],
                     $row['duration'] ? $this->minutes($row['duration']) : null,

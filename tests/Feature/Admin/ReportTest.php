@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Tests\Concerns\BuildsProjects;
 use Tests\TestCase;
 
@@ -135,14 +136,64 @@ class ReportTest extends TestCase
         $this->assertSame('queued', ReportJob::sole()->status);
     }
 
-    public function test_excel_only_for_recap_and_individual_needs_employee(): void
+    public function test_individual_report_needs_employee(): void
     {
         $this->actingAs($this->admin());
 
-        $this->postJson('/reports', ['type' => 'combined', 'format' => 'xlsx', 'range_mode' => 'period', 'period' => 1])
-            ->assertStatus(422);
-        $this->postJson('/reports', ['type' => 'individual', 'format' => 'pdf', 'range_mode' => 'period', 'period' => 1])
+        $this->postJson('/reports', ['type' => 'individual', 'format' => 'xlsx', 'range_mode' => 'period', 'period' => 1])
             ->assertStatus(422)->assertJsonValidationErrors('employee_id');
+    }
+
+    public function test_individual_excel_follows_pdf_columns(): void
+    {
+        $employee = $this->makeEmployee($this->project);
+        $this->attendance($employee, '2026-03-02', '08:00', '17:00', ['flags' => [Attendance::FLAG_BACKDATED]]);
+        $this->actingAs($this->admin());
+
+        $book = $this->downloadExcel([
+            'type' => 'individual', 'format' => 'xlsx', 'range_mode' => 'custom', 'from' => '2026-03-01', 'to' => '2026-03-03',
+            'employee_id' => $employee->id, 'photos' => '1',
+        ]);
+
+        $this->assertSame(1, $book->getSheetCount());
+        $sheet = $book->getSheet(0);
+        $this->assertSame('Laporan Absensi Harian', $sheet->getCell('A1')->getValue());
+        $this->assertSame('Tanggal', $sheet->getCell('A5')->getValue());
+        $this->assertSame('02/03/2026', $sheet->getCell('A7')->getValue());
+        $this->assertSame('08:00:00', $sheet->getCell('E7')->getValue());
+        $this->assertSame('Hadir', $sheet->getCell('I7')->getValue());
+        $this->assertSame('Tanggal mundur', $sheet->getCell('J7')->getValue());
+        $this->assertSame('9 jam 0 menit', $sheet->getCell('K7')->getValue());
+        $this->assertNull(ReportJob::sole()->params['photos'] ?? null);
+    }
+
+    public function test_combined_excel_has_sheet_per_employee_and_all_rows_sheet(): void
+    {
+        // Nama sama → nama sheet dibuat unik
+        $a = $this->makeEmployee($this->project);
+        $b = $this->makeEmployee($this->project);
+        $this->attendance($a, '2026-03-02', '08:00', '17:00');
+        $this->attendance($b, '2026-03-02', '09:00', '17:00');
+        $this->actingAs($this->admin());
+
+        $book = $this->downloadExcel([
+            'type' => 'combined', 'format' => 'xlsx', 'range_mode' => 'custom', 'from' => '2026-03-01', 'to' => '2026-03-03',
+        ]);
+
+        $this->assertSame(['Semua Karyawan', 'Karyawan Uji', 'Karyawan Uji (2)'], $book->getSheetNames());
+        // Header + 2 karyawan × 3 hari
+        $this->assertSame(7, $book->getSheetByName('Semua Karyawan')->getHighestRow());
+    }
+
+    private function downloadExcel(array $payload): Spreadsheet
+    {
+        $res = $this->postJson('/reports', $payload)->assertOk();
+        $file = tempnam(sys_get_temp_dir(), 'x').'.xlsx';
+        file_put_contents($file, $this->get($res->json('data.download_url'))->streamedContent());
+        $book = IOFactory::load($file);
+        @unlink($file);
+
+        return $book;
     }
 
     public function test_team_leader_can_create_reports_but_not_for_other_projects(): void

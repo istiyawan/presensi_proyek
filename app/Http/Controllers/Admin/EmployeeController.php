@@ -35,7 +35,9 @@ class EmployeeController extends AdminController
                 'leaders' => (clone $assignments)->activeOn($today)->where('is_team_leader', true)->count(),
                 'devices' => (clone $assignments)->activeOn($today)
                     ->whereHas('employee.user.devices', fn ($q) => $q->where('is_active', true))->count(),
-                'ended' => (clone $assignments)->whereNotNull('end_date')->whereDate('end_date', '<', $today)->count(),
+                'ended' => (clone $assignments)->whereIn('employee_id', Employee::select('id'))
+                    ->whereNotNull('end_date')->whereDate('end_date', '<', $today)->count(),
+                'archived' => (clone $assignments)->whereIn('employee_id', Employee::onlyTrashed()->select('id'))->count(),
             ],
         ]);
     }
@@ -44,6 +46,7 @@ class EmployeeController extends AdminController
     {
         $project = $this->managedProject();
         $today = now($project->timezone)->toDateString();
+        $status = $request->input('status', 'active');
 
         $query = ProjectEmployee::query()
             ->select('project_employee.*')
@@ -52,9 +55,11 @@ class EmployeeController extends AdminController
             ->leftJoin('positions', 'positions.id', '=', 'employees.position_id')
             ->with(['employee.position', 'employee.user.devices' => fn ($q) => $q->where('is_active', true), 'shift'])
             ->where('project_employee.project_id', $project->id)
-            ->whereNull('employees.deleted_at')
-            ->when($request->input('status', 'active') === 'active', fn ($q) => $q->activeOn($today)->where('employees.is_active', true))
-            ->when($request->input('status') === 'ended', fn ($q) => $q->where(fn ($w) => $w
+            ->when($status === 'archived',
+                fn ($q) => $q->whereNotNull('employees.deleted_at'),
+                fn ($q) => $q->whereNull('employees.deleted_at'))
+            ->when($status === 'active', fn ($q) => $q->activeOn($today)->where('employees.is_active', true))
+            ->when($status === 'ended', fn ($q) => $q->where(fn ($w) => $w
                 ->whereDate('project_employee.end_date', '<', $today)->orWhere('employees.is_active', false)));
 
         return DataTables::eloquent($query)
@@ -73,6 +78,8 @@ class EmployeeController extends AdminController
                 return $device ? trim(($device->model ?: 'Perangkat').' · '.strtoupper((string) $device->platform), ' ·') : null;
             })
             ->addColumn('is_active', fn ($a) => $a->employee->is_active && ($a->end_date === null || $a->end_date->toDateString() >= now()->toDateString()))
+            ->addColumn('archived', fn ($a) => $a->employee->trashed())
+            ->addColumn('archived_at', fn ($a) => $a->employee->deleted_at?->translatedFormat('j M Y'))
             ->filterColumn('name', fn ($q, $kw) => $q->where(fn ($w) => $w
                 ->where('employees.full_name', 'like', "%{$kw}%")
                 ->orWhere('users.username', 'like', "%{$kw}%")
@@ -223,6 +230,53 @@ class EmployeeController extends AdminController
         return $this->saved($message);
     }
 
+    /**
+     * Hapus karyawan.
+     * - Belum punya riwayat presensi/izin → hapus permanen beserta akunnya (mis. salah input).
+     * - Sudah punya riwayat → diarsipkan: penugasan diakhiri, akun dinonaktifkan, riwayat tetap utuh.
+     * Karyawan yang juga terdaftar di proyek lain hanya boleh dihapus super admin.
+     */
+    public function destroy(Employee $employee): JsonResponse
+    {
+        $project = $this->managedProject();
+        $this->assignmentOrFail($project, $employee);
+        $this->ensureCanManageAcrossProjects($project, $employee, 'dihapus');
+
+        if ($employee->attendances()->exists() || $employee->leaveRequests()->exists()) {
+            $this->archive($employee);
+
+            return $this->saved('Karyawan diarsipkan. Riwayat presensi tetap tersimpan dan data bisa dipulihkan dari tab Arsip.');
+        }
+
+        DB::transaction(function () use ($employee) {
+            if ($user = $employee->user) {
+                $user->tokens()->delete();
+                $user->syncRoles([]);
+                $user->delete();
+            }
+            $employee->forceDelete();
+        });
+
+        return $this->saved('Karyawan dihapus permanen.');
+    }
+
+    /** Pulihkan dari arsip. Tanggal penugasan tidak diubah otomatis agar hari jeda tidak terhitung alpha. */
+    public function restore(Employee $employee): JsonResponse
+    {
+        $project = $this->managedProject();
+        abort_unless($employee->trashed(), 422, 'Karyawan tidak sedang diarsipkan.');
+        $this->assignmentOrFail($project, $employee);
+        $this->ensureCanManageAcrossProjects($project, $employee, 'dipulihkan');
+
+        DB::transaction(function () use ($employee) {
+            $employee->restore();
+            $employee->update(['is_active' => true]);
+            $employee->user?->update(['is_active' => true]);
+        });
+
+        return $this->saved('Karyawan dipulihkan. Atur ulang tanggal penugasan bila akan bertugas kembali.', ['id' => $employee->id]);
+    }
+
     public function resetPassword(Employee $employee): JsonResponse
     {
         $project = $this->managedProject();
@@ -312,6 +366,40 @@ class EmployeeController extends AdminController
     private function assignmentOrFail(Project $project, Employee $employee): ProjectEmployee
     {
         return ProjectEmployee::where('project_id', $project->id)->where('employee_id', $employee->id)->firstOrFail();
+    }
+
+    private function ensureCanManageAcrossProjects(Project $project, Employee $employee, string $action): void
+    {
+        $inOtherProjects = $employee->projects()->where('projects.id', '!=', $project->id)->exists();
+
+        abort_if($inOtherProjects && ! auth()->user()->isSuperAdmin(), 422,
+            "Karyawan juga terdaftar di proyek lain sehingga hanya bisa {$action} oleh super admin. Gunakan \"Keluarkan dari proyek\".");
+    }
+
+    /** Arsipkan: akhiri semua penugasan, cabut akses aplikasi, lalu soft delete. */
+    private function archive(Employee $employee): void
+    {
+        DB::transaction(function () use ($employee) {
+            $assignments = ProjectEmployee::with('project')->where('employee_id', $employee->id)->get();
+            foreach ($assignments as $assignment) {
+                $yesterday = now($assignment->project->timezone)->subDay()->startOfDay();
+                $ended = $assignment->end_date !== null && $assignment->end_date->lte($yesterday);
+                $assignment->update([
+                    'end_date' => $ended ? $assignment->end_date : max($yesterday, $assignment->start_date)->toDateString(),
+                    'is_team_leader' => false,
+                ]);
+            }
+
+            if ($user = $employee->user) {
+                $user->update(['is_active' => false]);
+                $user->tokens()->delete();
+                $user->devices()->update(['is_active' => false]);
+                $this->syncLeaderRole($user);
+            }
+
+            $employee->update(['is_active' => false]);
+            $employee->delete();
+        });
     }
 
     /** Role team_leader mengikuti ada/tidaknya penugasan TL aktif. */

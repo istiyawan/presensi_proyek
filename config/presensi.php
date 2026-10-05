@@ -45,6 +45,10 @@ return [
         // check-in. Lewat batas ini presensi dianggap lupa check-out.
         'max_work_hours' => 20,
 
+        // Karyawan boleh memilih tanggal presensi mundur sampai sekian hari
+        // (null = bebas, 0 = hanya hari ini)
+        'backdate_max_days' => null,
+
         // Offline
         'allow_offline' => true,
         'offline_max_hours' => 72,

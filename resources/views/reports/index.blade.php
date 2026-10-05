@@ -2,8 +2,8 @@
 
 @php
     $types = [
-        'individual' => ['icon' => 'person-vcard', 'label' => 'Individual', 'desc' => 'Satu karyawan, format Laporan Absensi Harian'],
-        'combined' => ['icon' => 'people', 'label' => 'Semua karyawan', 'desc' => 'Satu PDF berisi laporan tiap karyawan'],
+        'individual' => ['icon' => 'person-vcard', 'label' => 'Individual', 'desc' => 'Satu karyawan, format Laporan Absensi Harian, PDF / Excel'],
+        'combined' => ['icon' => 'people', 'label' => 'Semua karyawan', 'desc' => 'Laporan tiap karyawan dalam satu berkas, PDF / Excel'],
         'recap' => ['icon' => 'grid-3x3', 'label' => 'Rekap', 'desc' => 'Matriks karyawan × tanggal, PDF / Excel'],
     ];
 @endphp
@@ -71,16 +71,17 @@
 
                     <div class="form-section mb-0">
                         <div class="form-section-title">Opsi</div>
-                        <div data-for-type="recap" hidden>
+                        <div class="mb-3">
                             <label class="form-label">Format</label>
                             <div class="btn-group w-100" role="group">
                                 <input type="radio" class="btn-check" name="format" value="pdf" id="fmt-pdf" checked>
                                 <label class="btn btn-soft" for="fmt-pdf"><i class="bi bi-filetype-pdf text-danger me-1"></i>PDF</label>
                                 <input type="radio" class="btn-check" name="format" value="xlsx" id="fmt-xlsx">
-                                <label class="btn btn-soft" for="fmt-xlsx"><i class="bi bi-filetype-xlsx text-success me-1"></i>Excel (rekap + detail)</label>
+                                <label class="btn btn-soft" for="fmt-xlsx"><i class="bi bi-filetype-xlsx text-success me-1"></i>Excel</label>
                             </div>
+                            <div class="form-text" id="formatHint"></div>
                         </div>
-                        <div class="setting-row py-0" data-for-type="individual combined">
+                        <div class="setting-row py-0" data-for-type="individual combined" data-photo-option>
                             <div class="setting-text">
                                 <div class="setting-title">Sertakan foto CI / CO</div>
                                 <div class="setting-desc">Tanpa foto, PDF jauh lebih kecil &amp; cepat dibuat.</div>

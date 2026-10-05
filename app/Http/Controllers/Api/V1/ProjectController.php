@@ -65,6 +65,7 @@ class ProjectController extends ApiController
                 'block_mock_location' => (bool) $s['block_mock_location'],
                 'require_checkout_in_location' => (bool) $s['require_checkout_in_location'],
                 'max_work_hours' => (int) $s['max_work_hours'],
+                'backdate_max_days' => $s['backdate_max_days'] === null ? null : (int) $s['backdate_max_days'],
                 'allow_offline' => (bool) $s['allow_offline'],
                 'offline_max_hours' => (int) $s['offline_max_hours'],
                 'working_days' => array_map('intval', $s['working_days']),

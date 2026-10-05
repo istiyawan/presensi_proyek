@@ -23,6 +23,7 @@ class ProjectSettingController extends AdminController
             'timezones' => ProjectController::TIMEZONES,
             'signatories' => $project->signatories()->with('employee')->get(),
             'employees' => ProjectEmployee::with('employee.position')->where('project_id', $project->id)->get()
+                ->reject(fn ($a) => $a->employee->trashed())
                 ->map(fn ($a) => [
                     'id' => $a->employee_id,
                     'name' => $a->employee->display_name,
@@ -61,6 +62,8 @@ class ProjectSettingController extends AdminController
                 'block_mock_location' => ['required', 'boolean'],
                 'require_checkout_in_location' => ['required', 'boolean'],
                 'max_work_hours' => ['required', 'integer', 'between:12,36'],
+                // Kosong = tanpa batas
+                'backdate_max_days' => ['nullable', 'integer', 'between:0,365'],
             ],
             'offline' => [
                 'allow_offline' => ['required', 'boolean'],
@@ -79,13 +82,13 @@ class ProjectSettingController extends AdminController
         ], [
             'period_start_day' => 'tanggal mulai periode', 'period_end_day' => 'tanggal akhir periode',
             'max_gps_accuracy_m' => 'batas akurasi GPS', 'offline_max_hours' => 'batas umur data offline',
-            'max_work_hours' => 'batas jam kerja',
+            'max_work_hours' => 'batas jam kerja', 'backdate_max_days' => 'batas tanggal mundur',
             'report_city' => 'kota laporan',
         ]);
 
         // Simpan tipe yang benar (bukan string "1"/"0")
         foreach ($rules as $key => $r) {
-            if (str_contains($key, '.') || ! array_key_exists($key, $data)) {
+            if (str_contains($key, '.') || ! array_key_exists($key, $data) || $data[$key] === null) {
                 continue;
             }
             if (in_array('boolean', $r, true)) {

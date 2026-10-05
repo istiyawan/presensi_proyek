@@ -29,6 +29,9 @@ class Attendance extends Model
 
     public const FLAG_MISSING_CHECKOUT = 'missing_checkout';
 
+    /** Tanggal presensi dipilih mundur oleh karyawan (bukan tanggal saat dikirim). */
+    public const FLAG_BACKDATED = 'backdated';
+
     protected $guarded = ['id'];
 
     protected function casts(): array
@@ -75,9 +78,10 @@ class Attendance extends Model
         return $this->belongsTo(Project::class);
     }
 
+    /** Termasuk karyawan yang diarsipkan agar riwayat presensi tetap terbaca. */
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class)->withTrashed();
     }
 
     public function shift(): BelongsTo

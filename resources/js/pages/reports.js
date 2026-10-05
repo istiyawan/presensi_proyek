@@ -14,15 +14,23 @@ export default function () {
     const $form = $('#formReport');
     let pollTimer;
 
-    // Jenis laporan → tampilkan opsi yang relevan
+    const FORMAT_HINTS = {
+        individual: { xlsx: 'Excel: satu sheet berisi tabel harian karyawan.' },
+        combined: { xlsx: 'Excel: satu sheet per karyawan + sheet "Semua Karyawan" untuk filter / pivot.' },
+        recap: { xlsx: 'Excel: sheet Rekap (matriks) + sheet Detail.' },
+    };
+
+    // Jenis laporan & format → tampilkan opsi yang relevan (foto hanya untuk PDF)
     const syncType = () => {
         const type = $form.find('[name=type]:checked').val();
+        const format = $form.find('[name=format]:checked').val();
         $form.find('[data-for-type]').each(function () {
             this.hidden = !this.dataset.forType.split(' ').includes(type);
         });
-        if (type !== 'recap') $('#fmt-pdf').prop('checked', true);
+        if (format !== 'pdf') $form.find('[data-photo-option]').prop('hidden', true);
+        $('#formatHint').text(FORMAT_HINTS[type]?.[format] || '');
     };
-    $form.on('change', '[name=type]', syncType);
+    $form.on('change', '[name=type], [name=format]', syncType);
     syncType();
 
     // Periode vs rentang bebas

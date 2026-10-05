@@ -26,6 +26,7 @@
                 <li class="nav-item"><a class="nav-link active" href="#" data-status="active">Aktif</a></li>
                 <li class="nav-item"><a class="nav-link" href="#" data-status="ended">Berakhir / nonaktif</a></li>
                 <li class="nav-item"><a class="nav-link" href="#" data-status="all">Semua</a></li>
+                <li class="nav-item"><a class="nav-link" href="#" data-status="archived"><i class="bi bi-archive me-1"></i>Arsip @if ($stats['archived'])<span class="ms-1">({{ $stats['archived'] }})</span>@endif</a></li>
             </ul>
         </div>
         <div class="card-body">

@@ -58,7 +58,7 @@
                     <label class="form-label">Penanda</label>
                     <select class="form-select" name="flag">
                         <option value="">Semua</option>
-                        @foreach (['missing_checkout' => 'Lupa check-out', 'offline' => 'Dikirim offline', 'manual' => 'Koreksi manual', 'time_suspicious' => 'Waktu meragukan', 'low_accuracy' => 'GPS kurang akurat', 'holiday' => 'Masuk di hari libur'] as $k => $v)
+                        @foreach (['missing_checkout' => 'Lupa check-out', 'backdated' => 'Tanggal mundur', 'offline' => 'Dikirim offline', 'manual' => 'Koreksi manual', 'time_suspicious' => 'Waktu meragukan', 'low_accuracy' => 'GPS kurang akurat', 'holiday' => 'Masuk di hari libur'] as $k => $v)
                             <option value="{{ $k }}" @selected($flag === $k)>{{ $v }}</option>
                         @endforeach
                     </select>

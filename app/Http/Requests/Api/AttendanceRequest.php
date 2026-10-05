@@ -34,6 +34,7 @@ class AttendanceRequest extends FormRequest
             "{$prefix}note" => ['nullable', 'string', 'max:255'],
             "{$prefix}is_offline" => ['nullable', 'boolean'],
             "{$prefix}abandon_previous" => ['nullable', 'boolean'],
+            "{$prefix}work_date" => ['nullable', 'date_format:Y-m-d'],
             "{$prefix}captured_at" => ['nullable', 'required_if_accepted:'.$prefix.'is_offline', 'date'],
             "{$prefix}device_time" => ['nullable', 'date'],
             "{$prefix}device" => ['nullable', 'array'],

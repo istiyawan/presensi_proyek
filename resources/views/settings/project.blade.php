@@ -233,6 +233,18 @@
                             </div>
                             <div class="setting-row">
                                 <div class="setting-text">
+                                    <div class="setting-title">Batas presensi tanggal mundur</div>
+                                    <div class="setting-desc">Karyawan boleh memilih tanggal presensi sampai sekian hari ke belakang; presensi ditandai <em>Tanggal mundur</em>. Kosongkan = tanpa batas, isi 0 = hanya hari ini.</div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="input-group input-group-sm" style="width: 130px">
+                                        <input name="backdate_max_days" type="number" min="0" max="365" class="form-control text-end" placeholder="Bebas" value="{{ $s['backdate_max_days'] }}">
+                                        <span class="input-group-text">hari</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-text">
                                     <div class="setting-title">Check-out wajib di lokasi</div>
                                     <div class="setting-desc">Bila mati, check-out boleh dari mana saja (lokasi tetap dicatat).</div>
                                 </div>
