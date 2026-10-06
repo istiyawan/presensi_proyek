@@ -14,8 +14,10 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Throwable;
 
 /**
  * Membuat file laporan untuk satu ReportJob dan menyimpannya di storage privat.
@@ -30,6 +32,13 @@ class ReportGenerator
         'font' => ['bold' => true],
         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E3F0FB']],
     ];
+
+    /** Ukuran foto CI / CO di Excel: tinggi baris (pt), lebar kolom (karakter), tinggi foto (px). */
+    private const PHOTO_ROW_HEIGHT = 60;
+
+    private const PHOTO_COL_WIDTH = 12;
+
+    private const PHOTO_HEIGHT_PX = 72;
 
     public function __construct(private ReportService $reports, private SettingService $settings) {}
 
@@ -97,7 +106,8 @@ class ReportGenerator
         $book->getProperties()->setTitle($base['title'])->setCreator($this->settings->app('app_name'));
         $book->removeSheetByIndex(0);
 
-        $sections = $this->sections($project, $job, $base, false);
+        $withPhotos = (bool) ($job->params['photos'] ?? false);
+        $sections = $this->sections($project, $job, $base, $withPhotos);
 
         if ($job->type === 'combined') {
             $this->detailSheet($book->createSheet(), $sections, 'Semua Karyawan');
@@ -105,7 +115,7 @@ class ReportGenerator
 
         $used = ['semua karyawan'];
         foreach ($sections as $section) {
-            $this->employeeSheet($book->createSheet(), $section, $base, $used);
+            $this->employeeSheet($book->createSheet(), $section, $base, $used, $withPhotos);
         }
 
         if ($book->getSheetCount() === 0) {
@@ -116,18 +126,19 @@ class ReportGenerator
         return $this->xlsx($book);
     }
 
-    private function employeeSheet(Worksheet $sheet, array $section, array $base, array &$used): void
+    private function employeeSheet(Worksheet $sheet, array $section, array $base, array &$used, bool $withPhotos = false): void
     {
         $employee = $section['employee'];
         $sheet->setTitle($this->sheetTitle($employee->display_name, $used));
+        $lastCol = $withPhotos ? 'M' : 'K';
 
         $sheet->setCellValue('A1', 'Laporan Absensi Harian');
         $sheet->setCellValue('A2', 'Periode: '.$base['from']->format('d/m/Y').' - '.$base['to']->format('d/m/Y').($base['label'] ? " ({$base['label']})" : ''));
         $sheet->setCellValue('A3', 'Karyawan: '.$employee->full_name.($employee->nik ? " (NIK {$employee->nik})" : ''));
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
-        $sheet->fromArray(self::DETAIL_HEADERS_INDIVIDUAL, null, 'A5');
-        $sheet->getStyle('A5:K5')->applyFromArray(self::HEADER_STYLE);
+        $sheet->fromArray(array_merge(self::DETAIL_HEADERS_INDIVIDUAL, $withPhotos ? ['Foto CI', 'Foto CO'] : []), null, 'A5');
+        $sheet->getStyle("A5:{$lastCol}5")->applyFromArray(self::HEADER_STYLE);
 
         $r = 6;
         foreach ($section['rows'] as $row) {
@@ -136,25 +147,63 @@ class ReportGenerator
                 $row['check_in'] ?? '-', $row['check_out'] ?? '-', $row['coord_in'] ?? '-', $row['coord_out'] ?? '-',
                 $row['status'], implode(', ', $row['notes']), $row['duration'] ?? '-',
             ], null, "A{$r}", true);
+            if ($withPhotos) {
+                $this->photo($sheet, $row['photo_in'], "L{$r}");
+                $this->photo($sheet, $row['photo_out'], "M{$r}");
+                $sheet->getRowDimension($r)->setRowHeight(self::PHOTO_ROW_HEIGHT);
+            }
             $r++;
         }
         if (! $section['rows']) {
             $sheet->setCellValue("A{$r}", 'Tidak ada data pada periode ini.');
-            $sheet->mergeCells("A{$r}:K{$r}");
+            $sheet->mergeCells("A{$r}:{$lastCol}{$r}");
             $sheet->getStyle("A{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $r++;
         }
 
         $last = $r - 1;
-        $sheet->getStyle("A5:K{$last}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("A5:{$lastCol}{$last}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         $sheet->getStyle("E6:H{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("A6:{$lastCol}{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         foreach (range('A', 'K') as $c) {
             $sheet->getColumnDimension($c)->setAutoSize(true);
+        }
+        if ($withPhotos) {
+            $sheet->getColumnDimension('L')->setWidth(self::PHOTO_COL_WIDTH);
+            $sheet->getColumnDimension('M')->setWidth(self::PHOTO_COL_WIDTH);
+            $sheet->getStyle('L5:M5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
         $sheet->freezePane('A6');
 
         $this->signatures($sheet, $base['footer'], $last + 3);
         $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
+    }
+
+    /** Sisipkan foto (data URI dari ReportService) di tengah sel; foto kosong / rusak → "-". */
+    private function photo(Worksheet $sheet, ?string $dataUri, string $cell): void
+    {
+        $bytes = $dataUri ? base64_decode(substr($dataUri, strpos($dataUri, ',') + 1), true) : false;
+
+        try {
+            $drawing = $bytes ? MemoryDrawing::fromString($bytes) : null;
+        } catch (Throwable) {
+            $drawing = null;
+        }
+
+        if (! $drawing) {
+            $sheet->setCellValue($cell, '-');
+            $sheet->getStyle($cell)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            return;
+        }
+
+        $drawing->setHeight(self::PHOTO_HEIGHT_PX);
+        $colPx = (int) round(self::PHOTO_COL_WIDTH * 7 + 5);
+        $rowPx = (int) round(self::PHOTO_ROW_HEIGHT * 4 / 3);
+        $drawing->setCoordinates($cell)
+            ->setOffsetX(max(0, intdiv($colPx - $drawing->getWidth(), 2)))
+            ->setOffsetY(max(0, intdiv($rowPx - $drawing->getHeight(), 2)))
+            ->setWorksheet($sheet);
     }
 
     /** Kolom tanda tangan seperti PDF: 1 orang di kanan, 2–4 orang dibagi rata. */

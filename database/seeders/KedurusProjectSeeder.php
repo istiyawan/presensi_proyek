@@ -17,8 +17,6 @@ class KedurusProjectSeeder extends Seeder
 {
     public const DEFAULT_PASSWORD = 'Presensi#2026';
 
-    private const KSO = 'PT. Brahma Seta Indonesia - PT. INAKKO Internasional Konsulindo - PT. Ika Adya Perkasa (KSO)';
-
     /** username => [nama, gelar depan, gelar belakang, jabatan, team leader?] */
     private const EMPLOYEES = [
         'edi.santoso' => ['Edi Santoso', null, 'S.T., M.T.', 'Team Leader', true],
@@ -86,17 +84,15 @@ class KedurusProjectSeeder extends Seeder
                 'start_date' => '2026-02-25',
                 'is_team_leader' => $isLeader,
             ]]);
-
-            if ($isLeader) {
-                $project->signatories()->updateOrCreate(['label' => 'Dibuat'], [
-                    'employee_id' => $employee->id,
-                    'name' => $employee->display_name,
-                    'title' => $positionName,
-                    'organization' => self::KSO,
-                    'sort_order' => 1,
-                    'is_active' => true,
-                ]);
-            }
         }
+
+        $project->signatories()->updateOrCreate(['label' => 'Dibuat'], [
+            'employee_id' => null,
+            'name' => 'Ardhian Elia Patria',
+            'title' => 'Project Manager',
+            'organization' => 'NINDYA - ITP, KSO',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
     }
 }

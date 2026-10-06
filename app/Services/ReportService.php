@@ -124,9 +124,6 @@ class ReportService
             if (in_array(Attendance::FLAG_MISSING_CHECKOUT, $a?->flags ?? [], true)) {
                 $notes[] = 'Lupa check-out';
             }
-            if (in_array(Attendance::FLAG_BACKDATED, $a?->flags ?? [], true)) {
-                $notes[] = 'Tanggal mundur';
-            }
 
             return [
                 'date' => CarbonImmutable::parse($date)->format('d/m/Y'),

@@ -98,8 +98,8 @@ class ReportController extends AdminController
 
         $params += array_filter([
             'employee_id' => $data['type'] === 'individual' ? (int) $data['employee_id'] : null,
-            // Foto hanya untuk PDF
-            'photos' => $data['type'] !== 'recap' && $data['format'] === 'pdf' ? $request->boolean('photos') : null,
+            // Foto CI / CO untuk laporan individual & semua karyawan (PDF dan Excel)
+            'photos' => $data['type'] !== 'recap' ? $request->boolean('photos') : null,
         ], fn ($v) => $v !== null);
 
         $job = ReportJob::create([

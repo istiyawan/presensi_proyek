@@ -162,9 +162,37 @@ class ReportTest extends TestCase
         $this->assertSame('02/03/2026', $sheet->getCell('A7')->getValue());
         $this->assertSame('08:00:00', $sheet->getCell('E7')->getValue());
         $this->assertSame('Hadir', $sheet->getCell('I7')->getValue());
-        $this->assertSame('Tanggal mundur', $sheet->getCell('J7')->getValue());
+        $this->assertEmpty($sheet->getCell('J7')->getValue()); // tanggal mundur tidak ditampilkan
         $this->assertSame('9 jam 0 menit', $sheet->getCell('K7')->getValue());
-        $this->assertNull(ReportJob::sole()->params['photos'] ?? null);
+        $this->assertSame('Foto CI', $sheet->getCell('L5')->getValue());
+        $this->assertSame('Foto CO', $sheet->getCell('M5')->getValue());
+        $this->assertTrue(ReportJob::sole()->params['photos']);
+    }
+
+    public function test_individual_excel_embeds_check_in_and_out_photos(): void
+    {
+        $disk = Storage::fake(config('presensi.photo.disk'));
+        $img = imagecreatetruecolor(60, 80);
+        ob_start();
+        imagejpeg($img);
+        $disk->put('thumbs/in.jpg', ob_get_clean());
+        $disk->put('thumbs/out.jpg', $disk->get('thumbs/in.jpg'));
+
+        $employee = $this->makeEmployee($this->project);
+        $this->attendance($employee, '2026-03-02', '08:00', '17:00', ['check_in_thumb' => 'thumbs/in.jpg', 'check_out_thumb' => 'thumbs/out.jpg']);
+        $this->actingAs($this->admin());
+
+        $payload = ['type' => 'individual', 'format' => 'xlsx', 'range_mode' => 'custom', 'from' => '2026-03-01', 'to' => '2026-03-03',
+            'employee_id' => $employee->id];
+
+        $sheet = $this->downloadExcel($payload + ['photos' => '1'])->getSheet(0);
+        $this->assertSame(['L7', 'M7'], collect($sheet->getDrawingCollection())->map->getCoordinates()->sort()->values()->all());
+        $this->assertSame('-', $sheet->getCell('L6')->getValue()); // hari tanpa absensi
+
+        ReportJob::query()->delete();
+        $sheet = $this->downloadExcel($payload + ['photos' => '0'])->getSheet(0);
+        $this->assertCount(0, $sheet->getDrawingCollection());
+        $this->assertNull($sheet->getCell('L5')->getValue());
     }
 
     public function test_combined_excel_has_sheet_per_employee_and_all_rows_sheet(): void

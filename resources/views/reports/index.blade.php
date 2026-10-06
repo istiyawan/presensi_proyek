@@ -84,7 +84,7 @@
                         <div class="setting-row py-0" data-for-type="individual combined" data-photo-option>
                             <div class="setting-text">
                                 <div class="setting-title">Sertakan foto CI / CO</div>
-                                <div class="setting-desc">Tanpa foto, PDF jauh lebih kecil &amp; cepat dibuat.</div>
+                                <div class="setting-desc">Berlaku untuk PDF &amp; Excel. Tanpa foto, berkas jauh lebih kecil &amp; cepat dibuat.</div>
                             </div>
                             <div class="setting-control form-check form-switch m-0">
                                 <input class="form-check-input" type="checkbox" role="switch" name="photos" value="1" @checked($showPhoto)>

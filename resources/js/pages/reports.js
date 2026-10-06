@@ -20,14 +20,13 @@ export default function () {
         recap: { xlsx: 'Excel: sheet Rekap (matriks) + sheet Detail.' },
     };
 
-    // Jenis laporan & format → tampilkan opsi yang relevan (foto hanya untuk PDF)
+    // Jenis laporan & format → tampilkan opsi yang relevan
     const syncType = () => {
         const type = $form.find('[name=type]:checked').val();
         const format = $form.find('[name=format]:checked').val();
         $form.find('[data-for-type]').each(function () {
             this.hidden = !this.dataset.forType.split(' ').includes(type);
         });
-        if (format !== 'pdf') $form.find('[data-photo-option]').prop('hidden', true);
         $('#formatHint').text(FORMAT_HINTS[type]?.[format] || '');
     };
     $form.on('change', '[name=type], [name=format]', syncType);
