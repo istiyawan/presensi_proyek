@@ -23,7 +23,7 @@ class AttendanceService
 
     /**
      * @param  array{uuid: string, latitude: float, longitude: float, accuracy?: ?float, is_mock?: bool,
-     *               note?: ?string, is_offline?: bool, work_date?: ?string, captured_at?: ?string, device_time?: ?string,
+     *               note?: ?string, is_offline?: bool, work_date?: ?string, work_time?: ?string, captured_at?: ?string, device_time?: ?string,
      *               device?: ?array, flags?: ?array}  $data
      */
     public function checkIn(Employee $employee, Project $project, array $data, UploadedFile $photo): Attendance
@@ -196,14 +196,16 @@ class AttendanceService
 
     /**
      * Waktu presensi: waktu server untuk online, waktu terpercaya dari aplikasi untuk offline.
-     * Online dengan `work_date`: tanggal pilihan karyawan + jam server saat ini.
+     * Online dengan `work_date`: tanggal pilihan karyawan + jam pilihan (`work_time`) atau jam server saat ini.
      */
     private function resolveTime(Project $project, array $data, array $s): CarbonImmutable
     {
         $now = CarbonImmutable::now($project->timezone);
 
         if (! $this->isOffline($data)) {
-            return filled($data['work_date'] ?? null) ? $this->backdatedTime($now, $data['work_date'], $s) : $now;
+            $time = filled($data['work_date'] ?? null) ? $this->backdatedTime($now, $data['work_date'], $s) : $now;
+
+            return filled($data['work_time'] ?? null) ? $this->chosenTime($now, $time, $data['work_time']) : $time;
         }
 
         if (! $s['allow_offline']) {
@@ -248,6 +250,19 @@ class AttendanceService
         }
 
         return $now->setDate($date->year, $date->month, $date->day);
+    }
+
+    /** Jam pilihan karyawan (H:i) pada tanggal presensi; tidak boleh melewati jam sekarang. */
+    private function chosenTime(CarbonImmutable $now, CarbonImmutable $date, string $workTime): CarbonImmutable
+    {
+        [$hour, $minute] = array_map('intval', explode(':', $workTime));
+        $time = $date->setTime($hour, $minute);
+
+        if ($time->gt($now->addSeconds(config('presensi.future_tolerance_seconds')))) {
+            throw new AttendanceException('Jam presensi tidak boleh melewati jam sekarang.', 'invalid_work_time');
+        }
+
+        return $time;
     }
 
     /** Tanggal presensi bukan tanggal hari ini di zona waktu proyek. */

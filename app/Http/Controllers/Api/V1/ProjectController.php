@@ -66,6 +66,8 @@ class ProjectController extends ApiController
                 'require_checkout_in_location' => (bool) $s['require_checkout_in_location'],
                 'max_work_hours' => (int) $s['max_work_hours'],
                 'backdate_max_days' => $s['backdate_max_days'] === null ? null : (int) $s['backdate_max_days'],
+                // Aplikasi hanya mengizinkan jam absensi pilihan bila server menerima `work_time`.
+                'supports_work_time' => true,
                 'allow_offline' => (bool) $s['allow_offline'],
                 'offline_max_hours' => (int) $s['offline_max_hours'],
                 'working_days' => array_map('intval', $s['working_days']),

@@ -185,6 +185,36 @@ class AttendanceTest extends TestCase
         $this->assertSame(1, Attendance::count());
     }
 
+    public function test_back_dated_check_in_and_check_out_use_the_chosen_time(): void
+    {
+        $project = $this->makeProject();
+        Sanctum::actingAs($this->makeEmployee($project)->user);
+
+        $this->getJson("/api/v1/projects/{$project->id}/config")
+            ->assertJsonPath('data.rules.supports_work_time', true);
+
+        $this->post('/api/v1/attendance/check-in', $this->attendancePayload($project, ['work_date' => '2026-03-08', 'work_time' => '06:46']), ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('data.check_in.time', '2026-03-08T06:46:00+07:00')
+            ->assertJsonPath('data.flags', ['backdated']);
+
+        $this->post('/api/v1/attendance/check-out', $this->attendancePayload($project, ['work_date' => '2026-03-08', 'work_time' => '17:05']), ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.check_out.time', '2026-03-08T17:05:00+07:00')
+            ->assertJsonPath('data.duration_minutes', 619);
+    }
+
+    public function test_work_time_in_the_future_is_rejected(): void
+    {
+        $project = $this->makeProject();
+        Sanctum::actingAs($this->makeEmployee($project)->user);
+
+        $this->post('/api/v1/attendance/check-in', $this->attendancePayload($project, ['work_date' => '2026-03-10', 'work_time' => '09:00']), ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonPath('reason', 'invalid_work_time');
+
+        $this->assertSame(0, Attendance::count());
+    }
+
     public function test_work_date_of_today_is_not_flagged_as_back_dated(): void
     {
         $project = $this->makeProject();
